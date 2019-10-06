@@ -1,6 +1,6 @@
 clear all;close all;
 fprintf("Simulation of the observer.\n");
-obs = observer();
+obs = observer("Niter", 100);
 obs.simulation();
 intropsector = introspection(obs);
 intropsector.introspect(intropsector.conf.full);
