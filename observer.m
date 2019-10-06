@@ -38,7 +38,8 @@ classdef observer < handle
         t_support  % time support of the simulation.
         T_simu % simulation time in seconds.
         % Possible tested transformations.
-        tranf_dic = struct('uniform_rotation',1);
+        tranf_dic = struct('uniform_rotation',1,...
+            'static',2);
         % Plotting parameters.
         dimensions = struct('xmin',-10,'xmax',10,'ymin',-10,'ymax',10,...
             'zmin',0,'zmax',10);
@@ -94,7 +95,7 @@ classdef observer < handle
                 obj.t = ts;
                 obj.t_support = [obj.t_support ts];
                 fprintf("--------\nt=%f s, k = %i ..\n",obj.t,obj.k);
-                obj.evolution(obj.tranf_dic.uniform_rotation);
+                obj.evolution(obj.tranf_dic.static);
                 % measures on the planar scene.
                 obj.capture_planar_scene();
                 % Proprioceptive Sensors.
@@ -122,13 +123,16 @@ classdef observer < handle
                F = 1;
                w = 2*pi*F;  % frequence.
                T = SE3(cos(obj.t*w),sin(obj.t*w),0)*SE3.rpy(0,0,obj.t*w);
-               % Updates the camera pose.
-               obj.cur_camera.T = T;
-               % updates the parameters of the camera pose.
-               [obj.R{obj.k+1},obj.Psi{obj.k+1}] = tr2rt(T);
+           elseif type==obj.tranf_dic.static
+               fprintf("Simulation for a static transformation.\n");
+               T = SE3(0,0,0);
            else
                error('The given evolution configuration is not supported.');
            end
+           % Updates the camera pose.
+           obj.cur_camera.T = T;
+           % updates the parameters of the camera pose.
+           [obj.R{obj.k+1},obj.Psi{obj.k+1}] = tr2rt(T);
         end
         function draw_rt(obj)
             % real time drawing of the simulation.
