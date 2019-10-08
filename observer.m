@@ -39,7 +39,8 @@ classdef observer < handle
         T_simu % simulation time in seconds.
         % Possible tested transformations.
         tranf_dic = struct('uniform_rotation',1,...
-            'static',2);
+            'static',2,'staticTrans',3,'staticRot',4,...
+            'staticRotTrans',5);
         % Plotting parameters.
         dimensions = struct('xmin',-10,'xmax',10,'ymin',-10,'ymax',10,...
             'zmin',0,'zmax',10);
@@ -57,11 +58,11 @@ classdef observer < handle
             obj.R = {eye(3)};
             obj.Psi = {[0 0 0]'};
             obj.Gamma = {eye(3)*0};
-            obj.FPS = 100;
+            obj.FPS = 50;
             obj.dt = 1/obj.FPS;
             obj.t_support = [];
             obj.k = 0;
-            obj.T_simu = 2;
+            obj.T_simu = 10;
             % gains
             obj.H_gain = 4;  % default 4 
             obj.Gamma_gain = 1;  % default 1
@@ -95,7 +96,7 @@ classdef observer < handle
                 obj.t = ts;
                 obj.t_support = [obj.t_support ts];
                 fprintf("--------\nt=%f s, k = %i ..\n",obj.t,obj.k);
-                obj.evolution(obj.tranf_dic.static);
+                obj.evolution(obj.tranf_dic.staticRot);
                 % measures on the planar scene.
                 obj.capture_planar_scene();
                 % Proprioceptive Sensors.
@@ -126,6 +127,15 @@ classdef observer < handle
            elseif type==obj.tranf_dic.static
                fprintf("Simulation for a static transformation.\n");
                T = SE3(0,0,0);
+           elseif type==obj.tranf_dic.staticTrans
+               fprintf("Simulation for a static translation transformation.\n");
+               T = SE3(0.5,0,0);
+           elseif type==obj.tranf_dic.staticRot
+               fprintf("Simulation for a static rotation transformation.\n");
+               T = SE3.rpy(0,0,0.5);
+           elseif type==obj.tranf_dic.staticRotTrans
+               fprintf("Simulation for a static rotation and translation transformation.\n");
+               T = SE3.rpy(0.5,0,0)*SE3.rpy(0,0,0.5);
            else
                error('The given evolution configuration is not supported.');
            end
@@ -146,7 +156,9 @@ classdef observer < handle
         end
         function capture_planar_scene(obj)
             % planar scene.
-            obj.P0{obj.k} = mkgrid(4,10,'pose',SE3(0,0,5));
+            % first argument is the number of measures : n*n
+            n = 4;
+            obj.P0{obj.k} = mkgrid(n,10,'pose',SE3(0,0,5));
             % projection on the image planes.
             obj.p0{obj.k} = obj.ref_camera.project(obj.P0{obj.k}); 
             obj.p{obj.k} = obj.cur_camera.project(obj.P0{obj.k});
@@ -171,7 +183,7 @@ classdef observer < handle
         end
         function delete(obj)
             disp("Destruction of the object.");
-            pause();
+            % pause();
             close all;  %% closes the figures.
         end
         function ground_thruth(obj)
@@ -247,6 +259,7 @@ classdef observer < handle
         end
         
         function observation_corr(obj)
+            % The innovations are not stored on that case. (TODO)
             % Data of the frame Ak.
             AdjOm = obj.AdjOmega{obj.k};
             n = length(obj.P0{obj.k});
@@ -274,7 +287,7 @@ classdef observer < handle
                     ri = norm(ei - pi0/norm(pi0,2),2);  % this error is big when no normalized?
                     rif = obj.m_estimator(ri);  % filtered error.
                     inn = inn - k_H*rif*(eye(3)-ei*ei')*pi0*ei';
-                    inn = obj.mat_sat(-1,1,inn);
+                    %inn = obj.mat_sat(-1,1,inn);
                 end
                 % Observation.
                 % Translational movement estimation.

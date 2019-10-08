@@ -17,6 +17,8 @@ classdef introspection < handle
                 obj.inertial_lin_vel();
                 obj.homography();
             end
+            % TODO set the precision of the display
+            % using gca : https://fr.mathworks.com/help/matlab/ref/gca.html
         end
         function angular_velocity(obj)
             figure;
@@ -89,6 +91,9 @@ classdef introspection < handle
             for i=1:9
                subplot(3,3,i);title(sprintf("h%i",i));
                xlabel("t in seconds");ylabel("pixels");
+               legend("ground truth","estimation")
+               %ytickformat('%.1f');
+               %ylim([-4 4]);
             end
         end
     end
