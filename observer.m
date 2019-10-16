@@ -40,7 +40,8 @@ classdef observer < handle
         % Possible tested transformations.
         tranf_dic = struct('uniform_rotation',1,...
             'static',2,'staticTrans',3,'staticRot',4,...
-            'staticRotTrans',5);
+            'staticRotTrans',5,...
+            'pstaticRot',6);
         % Plotting parameters.
         dimensions = struct('xmin',-10,'xmax',10,'ymin',-10,'ymax',10,...
             'zmin',0,'zmax',10);
@@ -58,11 +59,11 @@ classdef observer < handle
             obj.R = {eye(3)};
             obj.Psi = {[0 0 0]'};
             obj.Gamma = {eye(3)*0};
-            obj.FPS = 50;
+            obj.FPS = 30;
             obj.dt = 1/obj.FPS;
             obj.t_support = [];
             obj.k = 0;
-            obj.T_simu = 10;
+            obj.T_simu = 100;
             % gains
             obj.H_gain = 4;  % default 4 
             obj.Gamma_gain = 1;  % default 1
@@ -80,7 +81,7 @@ classdef observer < handle
                 obj.dimensions.ymin obj.dimensions.ymax...
                 obj.dimensions.zmin obj.dimensions.zmax]);
             % outlier removal.
-            obj.thres = 100;
+            obj.thres = 1000;
             %  Variable number of inputs.
             for i=1:2:length(varargin)
                 if strcmp(varargin{i},'Niter')
@@ -96,7 +97,7 @@ classdef observer < handle
                 obj.t = ts;
                 obj.t_support = [obj.t_support ts];
                 fprintf("--------\nt=%f s, k = %i ..\n",obj.t,obj.k);
-                obj.evolution(obj.tranf_dic.staticRot);
+                obj.evolution(obj.tranf_dic.pstaticRot);
                 % measures on the planar scene.
                 obj.capture_planar_scene();
                 % Proprioceptive Sensors.
@@ -132,10 +133,20 @@ classdef observer < handle
                T = SE3(0.5,0,0);
            elseif type==obj.tranf_dic.staticRot
                fprintf("Simulation for a static rotation transformation.\n");
-               T = SE3.rpy(0,0,0.5);
+               T = SE3.rpy(0,0,0.00001);
            elseif type==obj.tranf_dic.staticRotTrans
                fprintf("Simulation for a static rotation and translation transformation.\n");
                T = SE3.rpy(0.5,0,0)*SE3.rpy(0,0,0.5);
+           elseif type==obj.tranf_dic.pstaticRot
+               fprintf("Simulation for a pseudo static rotation transformation.\n");
+               k_period = 100;  % period between each new transformation.
+               if mod(obj.k, k_period)==0
+                   % new transformation.
+                   T = SE3.rpy(0,0,0.0005)*obj.cur_camera.T;
+               else
+                   % do not change.
+                   T = obj.cur_camera.T;
+               end
            else
                error('The given evolution configuration is not supported.');
            end
@@ -268,6 +279,7 @@ classdef observer < handle
             k_G = obj.Gamma_gain/obj.Niter;
             ds = obj.dt/obj.Niter;  % integration step.
             % Initialization of the parameters which changes.
+            %Hhat = obj.H{obj.k};
             Hhat = obj.H{obj.k};
             Gammahat = obj.Gamma{obj.k};
             % Correction steps.
