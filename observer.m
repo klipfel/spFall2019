@@ -50,11 +50,19 @@ classdef observer < handle
         Niter=0;  % number of iterations per frame.
     end    
     methods
+        
+        % random gradient descent initialization.
+        function rgd(obj)
+        end
+        
+        
         function obj = observer(varargin)
             % initialization of the observer.
             fprintf("Initialization of the observer .. \n");
             obj.P0 = {};
-            obj.H = {eye(3)};
+            % Homography initialization.
+            obj.H = {[1 0 0.5 ; 0 1 0.2 ; 0 0 -0.5]};
+            
             obj.H_gt = {eye(3)};
             obj.R = {eye(3)};
             obj.Psi = {[0 0 0]'};
@@ -97,7 +105,7 @@ classdef observer < handle
                 obj.t = ts;
                 obj.t_support = [obj.t_support ts];
                 fprintf("--------\nt=%f s, k = %i ..\n",obj.t,obj.k);
-                obj.evolution(obj.tranf_dic.pstaticRot);
+                obj.evolution(obj.tranf_dic.staticRot);
                 % measures on the planar scene.
                 obj.capture_planar_scene();
                 % Proprioceptive Sensors.
@@ -133,7 +141,7 @@ classdef observer < handle
                T = SE3(0.5,0,0);
            elseif type==obj.tranf_dic.staticRot
                fprintf("Simulation for a static rotation transformation.\n");
-               T = SE3.rpy(0,0,0.00001);
+               T = SE3.rpy(0,0,0.0005);
            elseif type==obj.tranf_dic.staticRotTrans
                fprintf("Simulation for a static rotation and translation transformation.\n");
                T = SE3.rpy(0.5,0,0)*SE3.rpy(0,0,0.5);
