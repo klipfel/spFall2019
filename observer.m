@@ -18,6 +18,10 @@ classdef observer < handle
         Vin % inertial linear velocity.
         % Estimations.
         H % cells of the estimated homography
+        H0  % initialization for the homography.
+        % possible initalization distribution for the homography.
+        rand_distr = struct('uniform',1,'gaussian',2);
+        rand_distr_chosen
         H_gt  % ground truth homographies.
         I_H  % cells of the innovation terms of the homography estimation.
         Gamma % cells of the estimated Gamma, the translational movement.
@@ -52,7 +56,20 @@ classdef observer < handle
     methods
         
         % random gradient descent initialization.
-        function rgd(obj)
+        function H0 = rand_grad_d(obj,inf,sup, distr_type)
+            if distr_type==obj.rand_distr.uniform
+                fprintf("Uniform initialization\n.");
+                H0 = inf + (sup-inf).*rand(3,3);
+                % H0 = obj.scaling_to_SL3(H0);
+            elseif distr_type==obj.rand_distr.gaussian
+                fprintf("Gaussian initialization\n.");
+                sigma = 0.2;
+                H0 = [ 1 + sigma*randn(1), sigma *randn(1), sigma *randn(1);...
+                    sigma *randn(1), 1 + sigma *randn(1), sigma *randn(1);...
+                    sigma *randn(1), sigma *randn(1),1 + sigma *randn(1)];
+            else
+                error("The distribution asked for the random generation is invalid.");
+            end
         end
         
         
@@ -60,8 +77,14 @@ classdef observer < handle
             % initialization of the observer.
             fprintf("Initialization of the observer .. \n");
             obj.P0 = {};
+            
             % Homography initialization.
-            obj.H = {[1 0 0.5 ; 0 1 0.2 ; 0 0 -0.5]};
+            obj.rand_distr_chosen = obj.rand_distr.gaussian; 
+            h = obj.rand_grad_d(-1,1,obj.rand_distr_chosen);  % return H0.
+            obj.H = {h};
+            obj.H0 = h;
+            fprintf("Random initialization for the homography:\n");
+            disp(obj.H0);
             
             obj.H_gt = {eye(3)};
             obj.R = {eye(3)};
@@ -71,7 +94,7 @@ classdef observer < handle
             obj.dt = 1/obj.FPS;
             obj.t_support = [];
             obj.k = 0;
-            obj.T_simu = 100;
+            obj.T_simu = 20;
             % gains
             obj.H_gain = 4;  % default 4 
             obj.Gamma_gain = 1;  % default 1
@@ -105,7 +128,7 @@ classdef observer < handle
                 obj.t = ts;
                 obj.t_support = [obj.t_support ts];
                 fprintf("--------\nt=%f s, k = %i ..\n",obj.t,obj.k);
-                obj.evolution(obj.tranf_dic.staticRot);
+                obj.evolution(obj.tranf_dic.pstaticRot);
                 % measures on the planar scene.
                 obj.capture_planar_scene();
                 % Proprioceptive Sensors.
@@ -147,7 +170,7 @@ classdef observer < handle
                T = SE3.rpy(0.5,0,0)*SE3.rpy(0,0,0.5);
            elseif type==obj.tranf_dic.pstaticRot
                fprintf("Simulation for a pseudo static rotation transformation.\n");
-               k_period = 100;  % period between each new transformation.
+               k_period = 200;  % period between each new transformation.
                if mod(obj.k, k_period)==0
                    % new transformation.
                    T = SE3.rpy(0,0,0.0005)*obj.cur_camera.T;

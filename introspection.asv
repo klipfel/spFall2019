@@ -7,8 +7,7 @@ classdef introspection < handle
         function obj = introspection(observer)
             fprintf("----------\nIntrospected object :\n");
             disp(observer);
-            fprintf("----------\nRandom initialization of the homography :\n");
-            disp(observer.H0);
+            fprintf("----------\nRadom initialization of the homo :\n");
             obj.trg = observer;
         end
         function introspect(obj, conf)
