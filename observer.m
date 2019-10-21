@@ -94,7 +94,7 @@ classdef observer < handle
             obj.dt = 1/obj.FPS;
             obj.t_support = [];
             obj.k = 0;
-            obj.T_simu = 20;
+            obj.T_simu = 5;
             % gains
             obj.H_gain = 4;  % default 4 
             obj.Gamma_gain = 1;  % default 1
@@ -128,7 +128,7 @@ classdef observer < handle
                 obj.t = ts;
                 obj.t_support = [obj.t_support ts];
                 fprintf("--------\nt=%f s, k = %i ..\n",obj.t,obj.k);
-                obj.evolution(obj.tranf_dic.pstaticRot);
+                obj.evolution(obj.tranf_dic.staticRot);
                 % measures on the planar scene.
                 obj.capture_planar_scene();
                 % Proprioceptive Sensors.
@@ -153,7 +153,7 @@ classdef observer < handle
            if type==obj.tranf_dic.uniform_rotation
                % Homogeneous transformation : always with respect to the
                % reference pose.
-               F = 1;
+               F = 0.1;
                w = 2*pi*F;  % frequence.
                T = SE3(cos(obj.t*w),sin(obj.t*w),0)*SE3.rpy(0,0,obj.t*w);
            elseif type==obj.tranf_dic.static
@@ -164,7 +164,7 @@ classdef observer < handle
                T = SE3(0.5,0,0);
            elseif type==obj.tranf_dic.staticRot
                fprintf("Simulation for a static rotation transformation.\n");
-               T = SE3.rpy(0,0,0.0005);
+               T = SE3.rpy(0,0,0.05);
            elseif type==obj.tranf_dic.staticRotTrans
                fprintf("Simulation for a static rotation and translation transformation.\n");
                T = SE3.rpy(0.5,0,0)*SE3.rpy(0,0,0.5);
@@ -326,8 +326,10 @@ classdef observer < handle
                     %ei = obj.H_gt{obj.k+1}*pi;
                     % using the estimate.
                     ei = ei/norm(ei,2);
+                    %ei = ei/ei(3);
                     %ri = norm(ei - pi0/norm(pi0,2),2);
                     ri = norm(ei - pi0/norm(pi0,2),2);  % this error is big when no normalized?
+                    %ri = norm(ei - pi0,2);
                     rif = obj.m_estimator(ri);  % filtered error.
                     inn = inn - k_H*rif*(eye(3)-ei*ei')*pi0*ei';
                     %inn = obj.mat_sat(-1,1,inn);
