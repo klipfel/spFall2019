@@ -64,11 +64,9 @@ classdef observer < handle
             elseif distr_type==obj.rand_distr.gaussian
                 fprintf("Gaussian initialization\n.");
                 sigma = 0.2;
-                % the noise for the affine terms has to be really small.
-                sigma_affine = 0.01;
                 H0 = [ 1 + sigma*randn(1), sigma *randn(1), sigma *randn(1);...
                     sigma *randn(1), 1 + sigma *randn(1), sigma *randn(1);...
-                    sigma_affine *randn(1), sigma_affine *randn(1),1 + sigma *randn(1)];
+                    sigma *randn(1), sigma *randn(1),1 + sigma *randn(1)];
             else
                 error("The distribution asked for the random generation is invalid.");
             end
@@ -100,8 +98,7 @@ classdef observer < handle
             % gains
             obj.H_gain = 4;  % default 4 
             obj.Gamma_gain = 1;  % default 1
-            % cameras : need an intrinsic matrix K = I, normalize all 
-            % the measure (in [-1;1]).
+            % cameras : need an intri
             T_ini = SE3(0,0,0); % sets initial position of the camera in 
             % the world frame.
 %             obj.ref_camera = CentralCamera('name', 'reference', 'default',...
@@ -335,8 +332,8 @@ classdef observer < handle
                     ei = ei/norm(ei,2);
                     %ei = ei/ei(3);
                     %ri = norm(ei - pi0/norm(pi0,2),2);
-                    %ri = norm(ei - pi0/norm(pi0,2),2);  % this error is big when no normalized?
-                    ri = norm(ei - pi0,2);
+                    ri = norm(ei - pi0/norm(pi0,2),2);  % this error is big when no normalized?
+                    %ri = norm(ei - pi0,2);
                     rif = obj.m_estimator(ri);  % filtered error.
                     inn = inn - k_H*rif*(eye(3)-ei*ei')*pi0*ei';
                     %inn = obj.mat_sat(-1,1,inn);
