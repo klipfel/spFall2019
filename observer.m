@@ -94,17 +94,21 @@ classdef observer < handle
             obj.dt = 1/obj.FPS;
             obj.t_support = [];
             obj.k = 0;
-            obj.T_simu = 5;
+            obj.T_simu = 20;
             % gains
             obj.H_gain = 4;  % default 4 
             obj.Gamma_gain = 1;  % default 1
             % cameras.
             T_ini = SE3(0,0,0); % sets initial position of the camera in 
             % the world frame.
-            obj.ref_camera = CentralCamera('name', 'reference', 'default',...
-                'focal', 0.002, 'pose', T_ini);
-            obj.cur_camera = CentralCamera('name', 'current', 'default',...
-                'focal', 0.002, 'pose', T_ini);
+%             obj.ref_camera = CentralCamera('name', 'reference', 'default',...
+%                 'focal', 0.002, 'pose', T_ini);
+            obj.ref_camera = CentralCamera('name', 'reference', ...
+                'focal', 1, 'centre', [0,0], 'pose', T_ini);
+%             obj.cur_camera = CentralCamera('name', 'current', 'default',...
+%                 'focal', 0.002, 'pose', T_ini);
+            obj.cur_camera = CentralCamera('name', 'current',...
+                'focal', 1, 'centre', [0,0], 'pose', T_ini);
             % figure.
             figure;
             grid on;
@@ -128,7 +132,7 @@ classdef observer < handle
                 obj.t = ts;
                 obj.t_support = [obj.t_support ts];
                 fprintf("--------\nt=%f s, k = %i ..\n",obj.t,obj.k);
-                obj.evolution(obj.tranf_dic.staticRot);
+                obj.evolution(obj.tranf_dic.uniform_rotation);
                 % measures on the planar scene.
                 obj.capture_planar_scene();
                 % Proprioceptive Sensors.
@@ -161,10 +165,10 @@ classdef observer < handle
                T = SE3(0,0,0);
            elseif type==obj.tranf_dic.staticTrans
                fprintf("Simulation for a static translation transformation.\n");
-               T = SE3(0.5,0,0);
+               T = SE3(1,0,0);
            elseif type==obj.tranf_dic.staticRot
                fprintf("Simulation for a static rotation transformation.\n");
-               T = SE3.rpy(0,0,0.05);
+               T = SE3.rpy(0,0,0.5);
            elseif type==obj.tranf_dic.staticRotTrans
                fprintf("Simulation for a static rotation and translation transformation.\n");
                T = SE3.rpy(0.5,0,0)*SE3.rpy(0,0,0.5);
@@ -173,7 +177,7 @@ classdef observer < handle
                k_period = 200;  % period between each new transformation.
                if mod(obj.k, k_period)==0
                    % new transformation.
-                   T = SE3.rpy(0,0,0.0005)*obj.cur_camera.T;
+                   T = SE3.rpy(0,0,0.05)*obj.cur_camera.T;
                else
                    % do not change.
                    T = obj.cur_camera.T;
@@ -200,7 +204,7 @@ classdef observer < handle
             % planar scene.
             % first argument is the number of measures : n*n
             n = 4;
-            obj.P0{obj.k} = mkgrid(n,10,'pose',SE3(0,0,5));
+            obj.P0{obj.k} = mkgrid(n,10,'pose',SE3(0,0,10));
             % projection on the image planes.
             obj.p0{obj.k} = obj.ref_camera.project(obj.P0{obj.k}); 
             obj.p{obj.k} = obj.cur_camera.project(obj.P0{obj.k});
