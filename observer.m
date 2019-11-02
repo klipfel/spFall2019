@@ -52,6 +52,8 @@ classdef observer < handle
         % outlier removal.
         thres  % threshold.
         Niter=0;  % number of iterations per frame.
+        % with 0  it uses a separated estimation and innovation function
+        % with > 0 a gradient attenuation function.
     end    
     methods
         
@@ -63,9 +65,9 @@ classdef observer < handle
                 % H0 = obj.scaling_to_SL3(H0);
             elseif distr_type==obj.rand_distr.gaussian
                 fprintf("Gaussian initialization\n.");
-                sigma = 0.2;
+                sigma = 0.0;
                 % the noise for the affine terms has to be really small.
-                sigma_affine = 0.01;
+                sigma_affine = 0.0;
                 H0 = [ 1 + sigma*randn(1), sigma *randn(1), sigma *randn(1);...
                     sigma *randn(1), 1 + sigma *randn(1), sigma *randn(1);...
                     sigma_affine *randn(1), sigma_affine *randn(1),1 + sigma *randn(1)];
@@ -127,6 +129,8 @@ classdef observer < handle
                 end
             end
         end
+        
+        
         function simulation(obj)
             fprintf("Simulation started ....\n ");
             for ts=obj.dt:obj.dt:obj.T_simu+obj.dt
@@ -145,16 +149,20 @@ classdef observer < handle
                 %  ground thruth.
                 obj.ground_thruth();
                 % Estimation
+                % without gradient attenuation.
                 if obj.Niter == 0
+                    error("Use the gradient attenuation for Niter = 1 instead.");
                     obj.innovation();
                     obj.estimation();
-                else
+                else  % with gradient attenuation.
                     obj.observation_corr();
                 end
                 % draws.
                 obj.draw_rt();
             end
         end
+        
+        % Transformation or motion of the camera.
         function evolution(obj,type)
            % evolution of the camera.
            if type==obj.tranf_dic.uniform_rotation
@@ -193,6 +201,8 @@ classdef observer < handle
            % updates the parameters of the camera pose.
            [obj.R{obj.k+1},obj.Psi{obj.k+1}] = tr2rt(T);
         end
+        
+        
         function draw_rt(obj)
             % real time drawing of the simulation.
             % Cameras.
@@ -203,6 +213,8 @@ classdef observer < handle
             obj.cur_camera.plot(obj.P0{obj.k});
             % pause(obj.dt);
         end
+        
+        % Camera simulation.
         function capture_planar_scene(obj)
             % planar scene.
             % first argument is the number of measures : n*n
@@ -212,6 +224,9 @@ classdef observer < handle
             obj.p0{obj.k} = obj.ref_camera.project(obj.P0{obj.k}); 
             obj.p{obj.k} = obj.cur_camera.project(obj.P0{obj.k});
         end
+        
+        %%%%% Sensor simulation.
+        
         function angular_velocity(obj)
             % Rotations matrices from the previous and current poses.
             Rk = obj.R{obj.k};
@@ -221,29 +236,41 @@ classdef observer < handle
             % Angular velocities.
             obj.omega{obj.k} = vex(obj.AdjOmega{obj.k});
         end
+        
+        
         function linear_velocity(obj)
             obj.V0{obj.k} = (obj.Psi{obj.k+1} - obj.Psi{obj.k})/obj.dt;
         end
+        
+        
         function inertial_lin_vel(obj)
             Rkn = obj.R{obj.k+1};
             Psidotk = obj.V0{obj.k};
             % base changement.
             obj.Vin{obj.k} = Rkn'*Psidotk;
         end
+        
+        
         function delete(obj)
             disp("Destruction of the object.");
             % pause();
             close all;  %% closes the figures.
         end
+        
+        
         function ground_thruth(obj)
             % Ground thruth such that : H :  p |-> p0
             obj.H_gt{obj.k+1} = homography(obj.p{obj.k},obj.p0{obj.k});
             % Scaling to SL3.
             obj.H_gt{obj.k+1} = obj.scaling_to_SL3(obj.H_gt{obj.k+1});
         end
+        
+        
         function [H_SL3] = scaling_to_SL3(obj,H)
             H_SL3 = H/nthroot(det(H),3);
         end
+        
+        % Innovation without gradient attenuation.
         function innovation(obj)
             % Error on the estimate, for each measurement point.
             n = length(obj.P0{obj.k});  % number of measurements.
@@ -271,8 +298,12 @@ classdef observer < handle
             %obj.I_H{obj.k} = inn;
             % obj.I_H{obj.k} = mod(inn,1);
         end
+        
+        
         function error(obj)
         end
+        
+        
         function Ad = Adjoint(obj,H,X)
             eps = 1.0e-10;
             if (abs(trace(X))> eps)  % the innovation is not really in sl(3)
@@ -288,6 +319,8 @@ classdef observer < handle
             % Ajoint operator.
             Ad = H*X/H;
         end
+        
+        % Observation without gradient attenuation.
         function estimation(obj)
             Hhat = obj.H{obj.k};
             inn = obj.I_H{obj.k};% innovation;
@@ -307,6 +340,7 @@ classdef observer < handle
             obj.H{obj.k+1} = obj.scaling_to_SL3(obj.H{obj.k+1}); % complex number appear.
         end
         
+        %%% Observation with gradient attenuation.
         function observation_corr(obj)
             % The innovations are not stored on that case. (TODO)
             % Data of the frame Ak.
@@ -359,6 +393,7 @@ classdef observer < handle
             obj.Gamma{obj.k+1} = nGamma;
         end
         
+        
         function errf = m_estimator(obj, err)
             % removes outliers in the measurements points : points which have
             % a too big error.
@@ -369,10 +404,14 @@ classdef observer < handle
             end
             %disp(errf);
         end
+        
+        
         function sat = mat_sat(obj,a,b,mat)
             % saturation between a and b of the coefficient of a matrix mat.
             sat = mat + (mat>b).*(-mat + b) + (mat<a).*(-mat + a);
         end
+        
+        
     end
 end
 
