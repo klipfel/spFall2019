@@ -45,7 +45,7 @@ classdef observer < handle
         tranf_dic = struct('uniform_rotation',1,...
             'static',2,'staticTrans',3,'staticRot',4,...
             'staticRotTrans',5,...
-            'pstaticRot',6);
+            'pstaticRot',6,'uniform_trans',7);
         % Plotting parameters.
         dimensions = struct('xmin',-10,'xmax',10,'ymin',-10,'ymax',10,...
             'zmin',0,'zmax',10);
@@ -54,6 +54,14 @@ classdef observer < handle
         Niter=0;  % number of iterations per frame.
         % with 0  it uses a separated estimation and innovation function
         % with > 0 a gradient attenuation function.
+        % mode for the observer equation 
+        mode = 2;  % default
+        
+        % Planar scene
+        % plane altitude from the reference/ over the reference camera
+        planar_scene_z = 20;
+        n = [0 0 1]'; % normal unit vector of the immobile planar scene in the reference frame.
+        
     end    
     methods
         
@@ -98,7 +106,7 @@ classdef observer < handle
             obj.dt = 1/obj.FPS;
             obj.t_support = [];
             obj.k = 0;
-            obj.T_simu = 20;
+            obj.T_simu = 10;
             % gains
             obj.H_gain = 4;  % default 4 
             obj.Gamma_gain = 1;  % default 1
@@ -139,7 +147,7 @@ classdef observer < handle
                 obj.t = ts;
                 obj.t_support = [obj.t_support ts];
                 fprintf("--------\nt=%f s, k = %i ..\n",obj.t,obj.k);
-                obj.evolution(obj.tranf_dic.uniform_rotation);
+                obj.evolution(obj.tranf_dic.uniform_trans);
                 % measures on the planar scene.
                 obj.capture_planar_scene();
                 % Proprioceptive Sensors.
@@ -168,7 +176,7 @@ classdef observer < handle
            if type==obj.tranf_dic.uniform_rotation
                % Homogeneous transformation : always with respect to the
                % reference pose.
-               F = 0.1;
+               F = 1;
                w = 2*pi*F;  % frequence.
                T = SE3(cos(obj.t*w),sin(obj.t*w),0)*SE3.rpy(0,0,obj.t*w);
            elseif type==obj.tranf_dic.static
@@ -193,6 +201,11 @@ classdef observer < handle
                    % do not change.
                    T = obj.cur_camera.T;
                end
+           elseif type==obj.tranf_dic.uniform_trans
+               fprintf("Simulation for a uniform translation transformation.\n");
+               dmax = 10; % maximum move in x, or y directions.
+               s = dmax*obj.t/obj.T_simu;  % move from the reference
+               T = SE3(s,0,0);
            else
                error('The given evolution configuration is not supported.');
            end
@@ -219,7 +232,7 @@ classdef observer < handle
             % planar scene.
             % first argument is the number of measures : n*n
             n = 4;
-            obj.P0{obj.k} = mkgrid(n,10,'pose',SE3(0,0,10));
+            obj.P0{obj.k} = mkgrid(n,10,'pose',SE3(0,0,obj.planar_scene_z));
             % projection on the image planes.
             obj.p0{obj.k} = obj.ref_camera.project(obj.P0{obj.k}); 
             obj.p{obj.k} = obj.cur_camera.project(obj.P0{obj.k});
@@ -248,6 +261,14 @@ classdef observer < handle
             Psidotk = obj.V0{obj.k};
             % base changement.
             obj.Vin{obj.k} = Rkn'*Psidotk;
+        end
+        
+        
+        % computation of the distance to the planar scene in the current
+        % frame.
+        function distance_to_plane(obj)
+            % normal of the plane in the current frame.
+            %nc
         end
         
         
@@ -377,9 +398,15 @@ classdef observer < handle
                 end
                 % Observation.
                 % Translational movement estimation.
-                dGamma = Gammahat*AdjOm ...
-                    - k_G*obj.Adjoint(Hhat',inn);
-                nGamma = Gammahat + ds*dGamma;
+                if obj.mode == 1
+                    dGamma = obj.lie_brackets(Gammahat,AdjOm) ...
+                        - k_G*obj.Adjoint(Hhat',inn);
+                    nGamma = obj.to_sl3(Gammahat + ds*dGamma);
+                else
+                    dGamma = Gammahat*AdjOm ...
+                        - k_G*obj.Adjoint(Hhat',inn);
+                    nGamma = Gammahat + ds*dGamma;
+                end
                 % Homography estimation.
                 dH = Hhat*(AdjOm + Gammahat - (1/3)*trace(Gammahat)*eye(3)) ...
                     - inn*Hhat;
@@ -391,6 +418,18 @@ classdef observer < handle
             % Stores the estimate a time k+1.
             obj.H{obj.k+1} = nH;
             obj.Gamma{obj.k+1} = nGamma;
+        end
+        
+        
+        function z = lie_brackets(obj, x, y)
+            % x, and y must be in sl(3) in this case.
+            z = x*y - y*x;
+        end
+        
+        
+        % To sl(3) if not.
+        function y = to_sl3(obj, x)
+            y = x - trace(x)*eye(3)*1/3;
         end
         
         
