@@ -45,8 +45,7 @@ classdef observer < handle
         tranf_dic = struct('uniform_rotation',1,...
             'static',2,'staticTrans',3,'staticRot',4,...
             'staticRotTrans',5,...
-            'pstaticRot',6,'uniform_trans',7,'exp_conv',8,...
-            'cycloid',9);
+            'pstaticRot',6,'uniform_trans',7);
         % Plotting parameters.
         dimensions = struct('xmin',-10,'xmax',10,'ymin',-10,'ymax',10,...
             'zmin',0,'zmax',10);
@@ -56,7 +55,7 @@ classdef observer < handle
         % with 0  it uses a separated estimation and innovation function
         % with > 0 a gradient attenuation function.
         % mode for the observer equation 
-        mode = 3;  % default
+        mode = 2;  % default
         
         % Planar scene
         % plane altitude from the reference/ over the reference camera
@@ -158,7 +157,7 @@ classdef observer < handle
                 obj.t = ts;
                 obj.t_support = [obj.t_support ts];
                 fprintf("--------\nt=%f s, k = %i ..\n",obj.t,obj.k);
-                obj.evolution(obj.tranf_dic.cycloid);
+                obj.evolution(obj.tranf_dic.uniform_trans);
                 % measures on the planar scene.
                 obj.capture_planar_scene();
                 % Proprioceptive Sensors.
@@ -169,20 +168,12 @@ classdef observer < handle
                 obj.ground_thruth();
                 % Estimation
                 % without gradient attenuation.
-                obj.switching();
                 if obj.Niter == 0
                     error("Use the gradient attenuation for Niter = 1 instead.");
                     obj.innovation();
                     obj.estimation();
                 else  % with gradient attenuation.
-                    if obj.mode == 3
-                        % case of the hybrid observer.
-                        obj.bi_observation_corr();
-                    else
-                        % case without switching between the kinematics of 
-                        % Gamma.
-                        obj.observation_corr();
-                    end
+                    obj.observation_corr();
                 end
                 % draws.
                 obj.draw_rt();
@@ -225,17 +216,6 @@ classdef observer < handle
                dmax = 10; % maximum move in x, or y directions.
                s = dmax*obj.t/obj.T_simu;  % move from the reference
                T = SE3(s,0,0);
-           elseif type==obj.tranf_dic.exp_conv
-               fprintf("Simulation for an exponential convergence toward the scene.\n");
-               zmax=2/3*obj.planar_scene_z;
-               z=zmax*(1-exp(-obj.t));
-               T = SE3(0,0,z);
-           elseif type==obj.tranf_dic.cycloid
-               fprintf("Simulation for a cycloid transformation.\n");
-               zmax=1/3*obj.planar_scene_z;
-               z=zmax*(1-exp(-obj.t));
-               w = 5;
-               T = SE3(cos(obj.t*w),sin(obj.t*w),z)*SE3.rpy(0,0,obj.t*w);
            else
                error('The given evolution configuration is not supported.');
            end
@@ -254,7 +234,7 @@ classdef observer < handle
             % Camera planes.
             obj.ref_camera.plot(obj.P0{obj.k});
             obj.cur_camera.plot(obj.P0{obj.k});
-            pause(obj.dt);
+            % pause(obj.dt);
         end
         
         % Camera simulation.
@@ -303,16 +283,9 @@ classdef observer < handle
             obj.cnd_lie{obj.k+1} = obj.V0{obj.k}/obj.d{obj.k};
             obj.cnd_out_lie{obj.k+1} = obj.Vin{obj.k}/obj.d{obj.k};
             % test.
-            cnd_lie_dot = abs((obj.cnd_lie{obj.k+1}-obj.cnd_lie{obj.k})/obj.dt);
-            cnd_out_lie_dot = abs((obj.cnd_out_lie{obj.k+1}-obj.cnd_out_lie{obj.k})/obj.dt);
-            eps = 1e-7;
-            if cnd_lie_dot < eps % lie kinematics for Gamma.
-                obj.kin_mode{obj.k} = 1;
-            elseif cnd_out_lie_dot < eps
-                obj.kin_mode{obj.k} = 2;
+            if abs((obj.cnd_lie{obj.k+1}-obj.cnd_lie{obj.k})obj.dt)<1e-7:
             else
-                obj.kin_mode{obj.k} = 3;
-            end
+                
         end
         
         % computes the distance to the planar scene in the current frame.
@@ -476,63 +449,6 @@ classdef observer < handle
             obj.H{obj.k+1} = nH;
             obj.Gamma{obj.k+1} = nGamma;
         end
-        
-        
-        %%% Observation with gradient attenuation and the two 
-        % kinematics for Gamma.
-        function bi_observation_corr(obj)
-            % Check the type of kinematics for Gamma.
-            obj.switching();
-            % Data of the frame Ak.
-            AdjOm = obj.AdjOmega{obj.k};
-            n = length(obj.P0{obj.k});
-            % gains for the corrections.
-            k_H = obj.H_gain/obj.Niter;
-            k_G = obj.Gamma_gain/obj.Niter;
-            ds = obj.dt/obj.Niter;  % integration step.
-            % Initialization of the parameters which changes.
-            Hhat = obj.H{obj.k};
-            Gammahat = obj.Gamma{obj.k};
-            % Correction steps.
-            for k=1:obj.Niter
-                % Innovation.
-                inn = 0*eye(3);
-                for i=1:n
-                    % Error for the measurement point Pi0.
-                    pi = [obj.p{obj.k}(:,i) ; 1]; % use homogeneous coordinates.
-                    pi0 = [obj.p0{obj.k}(:,i); 1];  % projection in the reference
-                    % image plane.
-                    ei = Hhat*pi; % estimation of the projection
-                    % using the estimate.
-                    ei = ei/norm(ei,2);
-                    ri = norm(ei - pi0,2);
-                    rif = obj.m_estimator(ri);  % filtered error.
-                    inn = inn - k_H*rif*(eye(3)-ei*ei')*pi0*ei';
-                end
-                % Observation.
-                % Translational movement estimation.
-                if obj.kin_mode{obj.k} == 1  % Gamma must be in sl(3)
-                    dGamma = obj.lie_brackets(Gammahat,AdjOm) ...
-                        - k_G*obj.Adjoint(Hhat',inn);
-                    nGamma = obj.to_sl3(Gammahat + ds*dGamma);
-                else % Gamma not in sl(3).
-                    dGamma = Gammahat*AdjOm ...
-                        - k_G*obj.Adjoint(Hhat',inn);
-                    nGamma = Gammahat + ds*dGamma;
-                end
-                % Homography estimation.
-                dH = Hhat*(AdjOm + Gammahat - (1/3)*trace(Gammahat)*eye(3)) ...
-                    - inn*Hhat;
-                nH = obj.scaling_to_SL3(Hhat + ds*dH);
-                % Updates.
-                Hhat = nH;
-                Gammahat = nGamma;
-            end
-            % Stores the estimate a time k+1.
-            obj.H{obj.k+1} = nH;
-            obj.Gamma{obj.k+1} = nGamma;
-        end
-        
         
         
         function z = lie_brackets(obj, x, y)
